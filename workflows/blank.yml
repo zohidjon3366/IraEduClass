@@ -1,0 +1,64 @@
+name: Build release APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build-apk:
+    name: Build release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Find Flutter source folder
+        shell: bash
+        run: |
+          set -e
+          if [ -f "src/pubspec.yaml" ]; then
+            PROJECT_DIR="src"
+          else
+            PROJECT_DIR=$(find . -maxdepth 4 -type f -path "*/src/pubspec.yaml" -printf '%h\n' | head -n 1)
+          fi
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: src/pubspec.yaml topilmadi. GitHub repository ichida src/pubspec.yaml bo'lishi kerak."
+            echo "Repository tarkibi:"
+            find . -maxdepth 3 -type f | sort
+            exit 1
+          fi
+
+          PROJECT_DIR="${PROJECT_DIR#./}"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Flutter source folder: $PROJECT_DIR"
+
+      - name: Show Flutter version
+        run: flutter --version
+
+      - name: Generate Android project files
+        shell: bash
+        run: flutter create --platforms=android,web --project-name iraeduclass_flutter "$PROJECT_DIR"
+
+      - name: Get dependencies
+        shell: bash
+        run: flutter pub get
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      - name: Build release APK
+        shell: bash
+        run: flutter build apk --release
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iraeduclass-release-apk
+          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
